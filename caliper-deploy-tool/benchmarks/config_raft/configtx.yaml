@@ -28,7 +28,7 @@ Organizations:
     AdminPrincipal: Role.ADMIN
     AnchorPeers:
     - Host: peer0.org2.example.com
-      Port: 7078
+      Port: 7051
 
 
 Orderer: &OrdererDefaults

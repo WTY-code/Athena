@@ -12,7 +12,7 @@ docker rm cdt
 
 docker run -v  ${CDTHOME}:/hyperledger/caliper/workspace \
 --dns ${CDTIP} --name=cdt \
-cdt npx caliper launch master \
+cdt caliper launch master \
 --caliper-workspace  /hyperledger/caliper/workspace \
 --caliper-benchconfig dist/config-distributed.yaml \
 --caliper-networkconfig dist/client.yaml

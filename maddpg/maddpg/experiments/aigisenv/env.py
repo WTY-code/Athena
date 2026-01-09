@@ -91,7 +91,7 @@ class AigisEnv(gym.Env):
         # 执行一次benchmark，获取所有Prometheus
         self._act_importance = act_importance
         self._action_limits = self._get_action_limits()
-        self._max_list = np.array(self._action_dict2list(self._action_limits, index=True)).copy()
+        self._max_list = np.array(self._action_dict2list(self._action_limits, index=True), dtype=object).copy()
         self._obs_limits = None
         self._obs_shape_dict = None
         
@@ -101,10 +101,10 @@ class AigisEnv(gym.Env):
             initial_reward_params = self._collect_state()
             
             print("Saved to metadata.")
-            self.save_config(initial_reward_params, "/root/code/aigis/maddpg/maddpg/experiments/obs-metadata.npy")
+            self.save_config(initial_reward_params, "./obs-metadata.npy")
         else:
             print("Loaded from metadata.")
-            initial_reward_params = self.load_metadata("/root/code/aigis/maddpg/maddpg/experiments/obs-metadata.npy")
+            initial_reward_params = self.load_metadata("./obs-metadata.npy")
             self.state = initial_reward_params
             self.current_reward_params = {
             "Latency": self.state['caliper']['Latency'],
@@ -340,7 +340,13 @@ class AigisEnv(gym.Env):
             self.last_reward_params = self.current_reward_params
 
         response = requests.request("GET", url + "/metrics")
-        state = json.loads(response.text)
+        try:
+            state = json.loads(response.text)
+        except json.JSONDecodeError as e:
+            print(f"Error decoding JSON from {url}/metrics. Status Code: {response.status_code}")
+            print(f"Response text: {response.text}")
+            raise e
+            
         self.current_reward_params = {
             "Latency": state['caliper']['Latency'],
             "TPS": state['caliper']['TPS']

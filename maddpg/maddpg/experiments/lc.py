@@ -1,7 +1,8 @@
 import argparse
 from os import access
 import numpy as np
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
+tf.disable_v2_behavior()
 import time
 import pickle
 import pymongo
@@ -9,7 +10,7 @@ import datetime
 
 import maddpg.common.tf_util as U
 from maddpg.trainer.maddpg import MADDPGAgentTrainer
-import tensorflow.contrib.layers as layers
+# import tensorflow.contrib.layers as layers
 
 import pdb
 # import sys
@@ -48,9 +49,9 @@ def mlp_model(input, num_outputs, scope, reuse=False, num_units=64, rnn_cell=Non
     # This model takes as input an observation and returns values of all actions
     with tf.variable_scope(scope, reuse=reuse):
         out = input
-        out = layers.fully_connected(out, num_outputs=num_units, activation_fn=tf.nn.relu)
-        out = layers.fully_connected(out, num_outputs=num_units, activation_fn=tf.nn.relu)
-        out = layers.fully_connected(out, num_outputs=num_outputs, activation_fn=None)
+        out = tf.layers.dense(out, units=num_units, activation=tf.nn.relu)
+        out = tf.layers.dense(out, units=num_units, activation=tf.nn.relu)
+        out = tf.layers.dense(out, units=num_outputs, activation=None)
         return out
 
 
@@ -73,7 +74,7 @@ def train_lc(arglist):
     with U.single_threaded_session():
         # Create environment
         # env = make_env(arglist.scenario, arglist, arglist.benchmark)
-        env = AigisEnv(booted=True, act_importance=53)
+        env = AigisEnv(booted=False, act_importance=53)
         # Create agent trainers
         obs_shape_n = [env.observation_space[i] for i in range(env.n)]
         # num_adversaries = min(env.n, arglist.num_adversaries)

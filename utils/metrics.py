@@ -25,27 +25,47 @@ class Metrics(object):
         """
         metrics = []
         
-        response = requests.request("GET", self._url)
-        data = response.text
+        try:
+            response = requests.request("GET", self._url, timeout=5)
+            data = response.text
+        except Exception as e:
+            print(f"Error fetching metrics from {self._url}: {e}")
+            return []
 
         lines = data.split('\n')
         for line in lines:
             if line.startswith('# ') or len(line) == 0:
                 continue
- 
-            metric_item = self.schema
-            line_parts = line.split(' ')
-            metric_item['value'] = line_parts[1]
-            
-            if line_parts[0].endswith('}'):
-                metric_item['key'] = line_parts[0].split('{')[0]
-                labels = line_parts[0].split('{')[1][:-1].split(',')
-                for la in labels:
-                    metric_item['label'][la.split('=')[0]] = la.split('=')[1][1:-1]
-            else:
-                metric_item['key'] = line_parts[0]
 
-            metrics.append(metric_item)
+            try:
+                metric_item = self.schema.copy() # Use copy to avoid reference issues
+                # factory_metric returns a new dict, but here self.schema is a property returning a new dict? 
+                # Property implementation: return {'key': None, 'label':{}, 'value': 0} -> Yes, it returns a new dict.
+                # But let's be safe.
+                
+                line_parts = line.split(' ')
+                if len(line_parts) < 2:
+                    continue
+                    
+                metric_item['value'] = float(line_parts[1])
+                
+                if line_parts[0].endswith('}'):
+                    metric_item['key'] = line_parts[0].split('{')[0]
+                    # Handle labels
+                    label_part = line_parts[0].split('{')[1][:-1]
+                    if label_part:
+                        labels = label_part.split(',')
+                        for la in labels:
+                            if '=' in la:
+                                key, val = la.split('=', 1)
+                                metric_item['label'][key] = val.strip('"')
+                else:
+                    metric_item['key'] = line_parts[0]
+
+                metrics.append(metric_item)
+            except Exception as e:
+                # print(f"Error parsing line '{line}': {e}")
+                continue
 
         # filter
         if self._filter:

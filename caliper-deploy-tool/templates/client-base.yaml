@@ -24,9 +24,7 @@ caliper:
     start: {{client.ansible.startcmd}}
     end: {{client.ansible.endcmd}}
   {% endif %}
-  command:
-    # start: export FABRIC_VERSION=1.4.4;export FABRIC_CA_VERSION=1.4.4;docker-compose -f networks/fabric/docker-compose/2org1peergoleveldb_raft/docker-compose-tls.yaml up -d;sleep 3s
-    end: wget 10.10.7.51:5000/cdt/reset -O 1.txt
+
 
 info:
   Version: 2.0.0

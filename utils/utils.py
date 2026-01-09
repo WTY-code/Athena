@@ -38,6 +38,8 @@ def get_node_endpoints(config_data):
 def handler_metrics_prom(data):
     # 取平均值
     df = pd.DataFrame(data)
+    # Ensure all data is numeric, coercing errors to NaN
+    df = df.apply(pd.to_numeric, errors='coerce')
     return df.mean().tolist()
 
 # def gen_limitscsv(data):

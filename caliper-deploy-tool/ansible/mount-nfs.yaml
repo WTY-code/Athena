@@ -3,7 +3,7 @@
   remote_user: root
   vars:
     dest_dir: /root/ansible/nfs
-    nfs: 10.10.7.51
+    nfs: 192.168.0.25
   tasks:
   - name: mkdir into {{dest_dir}}
     shell: mkdir -p {{dest_dir}}

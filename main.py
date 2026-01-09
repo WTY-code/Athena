@@ -19,7 +19,7 @@ action_deployer = Deployer()
 
 CONFIG_PATH = "caliper-deploy-tool/config.yaml"
 
-CDTIP = "10.10.7.51"
+CDTIP = "192.168.0.25"
 
 app = Flask(__name__)
 cdt_config = utils.load_config(CONFIG_PATH)
@@ -93,8 +93,16 @@ def invoke_cdt(auto_stop = False):
     else:
         shell_cmd_down = "export CDTIP=%s; cd caliper-deploy-tool; make deploy-fabric-down" % CDTIP
         subprocess.call(shell_cmd_down, shell=True)
+        
+        shell_cmd_umount = "ansible cdt -m shell -a 'umount -l /root/ansible/nfs'"
+        subprocess.call(shell_cmd_umount, shell=True)
+
         shell_cmd_generate = "export CDTIP=%s; cd caliper-deploy-tool; make generate" % CDTIP
         subprocess.call(shell_cmd_generate, shell=True)
+
+        shell_cmd_setup = "export CDTIP=%s; cd caliper-deploy-tool; make setup-config" % CDTIP
+        subprocess.call(shell_cmd_setup, shell=True)
+
         shell_cmd_up = "export CDTIP=%s; cd caliper-deploy-tool; make deploy-fabric-up" % CDTIP
         subprocess.call(shell_cmd_up, shell=True)
         shell_cmd_start = "export CDTIP=%s; cd caliper-deploy-tool; make start-cdt" % CDTIP

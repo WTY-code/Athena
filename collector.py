@@ -189,7 +189,7 @@ class Collector(object):
         html = pd.read_html(self._report)
         orderer_flag = np.bitwise_not(html[2]["Name"].str.contains("orderer"))
         ca_flag = np.bitwise_not(html[2]["Name"].str.contains("ca"))
-        data = html[2][orderer_flag & ca_flag].mean()
+        data = html[2][orderer_flag & ca_flag].mean(numeric_only=True)
         CPU = data["CPU%(avg)"]
         Mem = data["Memory(avg) [MB]"]
         Latency = html[1]["Avg Latency (s)"][0]

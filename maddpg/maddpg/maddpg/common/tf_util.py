@@ -1,21 +1,22 @@
 import collections
 import numpy as np
 import os
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
+tf.disable_v2_behavior()
 
 def sum(x, axis=None, keepdims=False):
-    return tf.reduce_sum(x, axis=None if axis is None else [axis], keep_dims = keepdims)
+    return tf.reduce_sum(x, axis=None if axis is None else [axis], keepdims = keepdims)
 def mean(x, axis=None, keepdims=False):
-    return tf.reduce_mean(x, axis=None if axis is None else [axis], keep_dims = keepdims)
+    return tf.reduce_mean(x, axis=None if axis is None else [axis], keepdims = keepdims)
 def var(x, axis=None, keepdims=False):
     meanx = mean(x, axis=axis, keepdims=keepdims)
     return mean(tf.square(x - meanx), axis=axis, keepdims=keepdims)
 def std(x, axis=None, keepdims=False):
     return tf.sqrt(var(x, axis=axis, keepdims=keepdims))
 def max(x, axis=None, keepdims=False):
-    return tf.reduce_max(x, axis=None if axis is None else [axis], keep_dims = keepdims)
+    return tf.reduce_max(x, axis=None if axis is None else [axis], keepdims = keepdims)
 def min(x, axis=None, keepdims=False):
-    return tf.reduce_min(x, axis=None if axis is None else [axis], keep_dims = keepdims)
+    return tf.reduce_min(x, axis=None if axis is None else [axis], keepdims = keepdims)
 def concatenate(arrs, axis=0):
     return tf.concat(axis=axis, values=arrs)
 def argmax(x, axis=None):

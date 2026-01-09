@@ -11,9 +11,7 @@
   #         force=true
 
   - name: down
-    shell: source /root/miniconda3/bin/activate caliper && docker-compose -f {{destdir}}/docker-compose.yaml down 
-    args:
-      executable: /bin/bash
+    shell: docker-compose -f {{destdir}}/docker-compose.yaml down
     ignore_errors: True
 
   # - name: down

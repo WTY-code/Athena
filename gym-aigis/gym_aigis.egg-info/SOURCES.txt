@@ -1,0 +1,7 @@
+README.md
+setup.py
+gym_aigis.egg-info/PKG-INFO
+gym_aigis.egg-info/SOURCES.txt
+gym_aigis.egg-info/dependency_links.txt
+gym_aigis.egg-info/requires.txt
+gym_aigis.egg-info/top_level.txt
