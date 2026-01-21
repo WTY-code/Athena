@@ -197,13 +197,31 @@ class AigisEnv(gym.Env):
         _obs = []
         for node_name in ("orderer", "peer", "peer-net"):
             _obs.append(pd.DataFrame(self._convert2sorteddf(state['prom'][node_name]).mean()).T)
-        _onelinedf = pd.concat(_obs, axis=1)
+        _onelinedf = pd.concat(_obs, axis=1).astype(float)
         if self._obs_limits is  None:
             # 设置obs的limit为初始值的5倍
             self._obs_limits = _onelinedf * 5
-        
+        else:
+            # Align columns to match the initial observation shape (limits)
+            # This handles cases where Prometheus metrics might vary (missing or new columns)
+            _onelinedf = _onelinedf.reindex(columns=self._obs_limits.columns, fill_value=0.0)
+
         # 此处fillna是为了防止除数为0，即最大值有可能是0
-        _onelineres = (_onelinedf / self._obs_limits).fillna(1.0).clip(0, 1.0)
+        # _onelineres = (_onelinedf / self._obs_limits).fillna(1.0).clip(0, 1.0)
+        # _temp = (_onelinedf / self._obs_limits).fillna(1.0)
+        # Use numpy for safer clipping to avoid Pandas AssertionError
+        # _onelineres = pd.DataFrame(np.clip(_temp.values.astype(float), 0.0, 1.0), columns=_temp.columns)
+        
+        # Complete bypass of Pandas for arithmetic to avoid BlockManager errors
+        _vals = _onelinedf.values
+        _limits = self._obs_limits.values
+        # Avoid division by zero warnings if limits has 0
+        with np.errstate(divide='ignore', invalid='ignore'):
+            _temp_np = _vals / _limits
+        
+        _temp_np = np.nan_to_num(_temp_np, nan=1.0)
+        _onelineres_np = np.clip(_temp_np, 0.0, 1.0)
+        _onelineres = pd.DataFrame(_onelineres_np, columns=_onelinedf.columns)
         # print(_onelineres.info())
         _res = []
         _sum = 0

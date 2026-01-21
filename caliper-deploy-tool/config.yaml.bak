@@ -34,27 +34,23 @@ fabric-network:
   orderer:
     orderer0.example.com:  
       <<: *common
-      host: 192.168.0.123
-      port: 6050
+      host: 192.168.0.96
+      port: 7050
     orderer1.example.com:  
       <<: *common
-      host: 192.168.0.123
-      port: 6060
+      host: 192.168.0.96
+      port: 8050
     orderer2.example.com:  
       <<: *common
-      host: 192.168.0.137
-      port: 6050
-    orderer3.example.com:  
-      <<: *common
-      host: 192.168.0.137
-      port: 6060
+      host: 192.168.0.96
+      port: 9050
 
   ca:
     ca.org1.example.com:  
       <<: *common
-      host: 192.168.0.123
+      host: 192.168.0.96
       port: 7054
     ca.org2.example.com:  
       <<: *common
-      host: 192.168.0.137
-      port: 7054
+      host: 192.168.0.96
+      port: 8054

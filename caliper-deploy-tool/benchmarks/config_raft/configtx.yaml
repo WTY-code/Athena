@@ -35,37 +35,44 @@ Orderer: &OrdererDefaults
     OrdererType: etcdraft
     Addresses:
     
-    - orderer0.example.com:7050
+    - orderer0.example.com:6050
     
-    - orderer1.example.com:8050
+    - orderer1.example.com:6060
     
-    - orderer2.example.com:9050
+    - orderer2.example.com:6050
+    
+    - orderer3.example.com:6060
     
 
-    BatchTimeout: 500ms
+    BatchTimeout: 2000ms
     BatchSize:
-        MaxMessageCount: 50
-        AbsoluteMaxBytes: 1048576
-        PreferredMaxBytes: 1048576
+        MaxMessageCount: 5000
+        AbsoluteMaxBytes: 10485760
+        PreferredMaxBytes: 2097152
 
     MaxChannels: 0
     EtcdRaft:
         Consenters:
         
         - Host: orderer0.example.com
-          Port: 7050
+          Port: 6050
           ClientTLSCert: crypto-config/ordererOrganizations/example.com/orderers/orderer0.example.com/tls/server.crt
           ServerTLSCert: crypto-config/ordererOrganizations/example.com/orderers/orderer0.example.com/tls/server.crt
         
         - Host: orderer1.example.com
-          Port: 8050
+          Port: 6060
           ClientTLSCert: crypto-config/ordererOrganizations/example.com/orderers/orderer1.example.com/tls/server.crt
           ServerTLSCert: crypto-config/ordererOrganizations/example.com/orderers/orderer1.example.com/tls/server.crt
         
         - Host: orderer2.example.com
-          Port: 9050
+          Port: 6050
           ClientTLSCert: crypto-config/ordererOrganizations/example.com/orderers/orderer2.example.com/tls/server.crt
           ServerTLSCert: crypto-config/ordererOrganizations/example.com/orderers/orderer2.example.com/tls/server.crt
+        
+        - Host: orderer3.example.com
+          Port: 6060
+          ClientTLSCert: crypto-config/ordererOrganizations/example.com/orderers/orderer3.example.com/tls/server.crt
+          ServerTLSCert: crypto-config/ordererOrganizations/example.com/orderers/orderer3.example.com/tls/server.crt
         
 
         Options:

@@ -34,7 +34,7 @@ def parse_args():
     # Checkpointing
     parser.add_argument("--exp-name", type=str, default=None, help="name of the experiment")
     parser.add_argument("--save-dir", type=str, default="/tmp/policy/", help="directory in which training state and model should be saved")
-    parser.add_argument("--save-rate", type=int, default=1000, help="save model once every time this many episodes are completed")
+    parser.add_argument("--save-rate", type=int, default=1, help="save model once every time this many episodes are completed")
     parser.add_argument("--load-dir", type=str, default="", help="directory in which training state and model are loaded")
     # Evaluation
     parser.add_argument("--restore", action="store_true", default=False)
@@ -68,9 +68,9 @@ def get_trainers_lc(env, obs_shape_n, arglist):
 
 def train_lc(arglist):
     print('train start...')
-    myclient = pymongo.MongoClient("mongodb://localhost:27017/")
-    mydb = myclient["aigis-maddpg"]
-    mycol = mydb["train1107_smallbank_8peers"]
+    # myclient = pymongo.MongoClient("mongodb://localhost:27017/")
+    # mydb = myclient["aigis-maddpg"]
+    # mycol = mydb["train1107_smallbank_8peers"]
     with U.single_threaded_session():
         # Create environment
         # env = make_env(arglist.scenario, arglist, arglist.benchmark)
@@ -120,10 +120,10 @@ def train_lc(arglist):
             new_obs_n, rew_n, done, info_n, tps, latency = env.step(action_n)
             # debug
             # pdb.set_trace()
-            mycol.insert_one({"action": [i.tolist() for i in action_n], "next_obs": [i.tolist() for i in new_obs_n], 
-                            "reward": rew_n[0], "done": done, "info": info_n, "train_step": train_step,
-                            "tps": tps, "latency": latency,
-                            "date": datetime.datetime.now()}) 
+            # mycol.insert_one({"action": [i.tolist() for i in action_n], "next_obs": [i.tolist() for i in new_obs_n], 
+            #                 "reward": rew_n[0], "done": done, "info": info_n, "train_step": train_step,
+            #                 "tps": tps, "latency": latency,
+            #                 "date": datetime.datetime.now()}) 
             episode_step += 1
             # done = done_n
             terminal = (episode_step >= arglist.max_episode_len)

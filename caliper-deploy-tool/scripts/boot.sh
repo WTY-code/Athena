@@ -3,8 +3,13 @@ echo "Set variable CDTHOME: ${CDTHOME}"
 if [ ${CDTIP} ];then
 	echo "Set DNS's ip: ${CDTIP}"
 else
-	echo -e "\033[31m CDTIP IS NOT SET \033[0m"
-    exit
+    # Auto-detect IP if not set
+    export CDTIP=$(hostname -I | awk '{print $1}')
+	echo -e "\033[33m CDTIP IS NOT SET. Using detected IP: ${CDTIP} \033[0m"
+    if [ -z "${CDTIP}" ]; then
+        echo -e "\033[31m Failed to detect IP. Please export CDTIP manually. \033[0m"
+        exit 1
+    fi
 fi
 
 

@@ -189,9 +189,14 @@ class Collector(object):
         html = pd.read_html(self._report)
         orderer_flag = np.bitwise_not(html[2]["Name"].str.contains("orderer"))
         ca_flag = np.bitwise_not(html[2]["Name"].str.contains("ca"))
-        data = html[2][orderer_flag & ca_flag].mean(numeric_only=True)
-        CPU = data["CPU%(avg)"]
-        Mem = data["Memory(avg) [MB]"]
+        try:
+            data = html[2][orderer_flag & ca_flag].mean(numeric_only=True)
+            CPU = data["CPU%(avg)"]
+            Mem = data["Memory(avg) [MB]"]
+        except Exception:
+            CPU = 0.0
+            Mem = 0.0
+        
         Latency = html[1]["Avg Latency (s)"][0]
         TPS = html[1]["Throughput (TPS)"][0]
         

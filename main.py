@@ -105,6 +105,11 @@ def invoke_cdt(auto_stop = False):
 
         shell_cmd_up = "export CDTIP=%s; cd caliper-deploy-tool; make deploy-fabric-up" % CDTIP
         subprocess.call(shell_cmd_up, shell=True)
+        
+        # Wait for Fabric network (especially CA) to be fully ready
+        print("Waiting 10s for Fabric network to initialize...")
+        time.sleep(10)
+        
         shell_cmd_start = "export CDTIP=%s; cd caliper-deploy-tool; make start-cdt" % CDTIP
         subprocess.call(shell_cmd_start, shell=True)
 

@@ -8,7 +8,7 @@ OrdererOrgs:
   Domain: example.com
 
   Template:
-      Count: 3
+      Count: 4
 
 PeerOrgs:
   

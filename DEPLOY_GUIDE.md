@@ -34,6 +34,7 @@ The original codebase had several compatibility issues with modern environments.
 ### D. Configuration & Ansible
 *   **Ansible:** Removed `miniconda` dependency from `ansible/deploy-up.yaml` and `ansible/deploy-down.yaml`. The playbook now uses the system `docker-compose`.
 *   **Client Config:** Removed a hanging `wget` command in `templates/client-base.yaml` that tried to contact a hardcoded IP (`10.10.7.51`), causing the benchmark to hang at completion.
+*   **NFS Stale Handle:** Added `umount -l /root/ansible/nfs` in `main.py` deployment loop to prevent "stale file handle" errors during repeated deployments.
 
 ---
 
@@ -44,6 +45,9 @@ The original codebase had several compatibility issues with modern environments.
 *   **Docker & Docker Compose:** Installed on all nodes.
 *   **Ansible:** Installed on the master node.
 *   **SSH Access:** Master node must be able to SSH to all worker nodes (configured in `/etc/ansible/hosts`).
+*   **Dependencies:**
+    *   `pip install tensorflow==2.11.0 gym==0.10.5 pandas lxml`
+    *   `pip install --upgrade Jinja2 Flask` (Fixes Ansible compatibility)
 
 ---
 
@@ -128,16 +132,65 @@ Upon success, the report is generated at:
 
 ---
 
-## 4. Quick Troubleshooting
+## 4. DRL Training Setup (Athena)
 
-**Q: Benchmark fails with `BAD_REQUEST` (Channel exists)?**
-A: You are trying to run `init` on an already running network.
-*   **Fix:** Run `make deploy-fabric-down` then `make deploy-fabric-up` to reset the network.
+This section covers the setup for the Deep Reinforcement Learning agent that optimizes the Fabric network.
 
-**Q: Chaincode instantiation fails / Peer cannot pull image?**
-A: The peer cannot find `fabric-baseos` or `fabric-ccenv`.
-*   **Fix:** Repeat **Step 4** to ensure images are loaded on all remote nodes. Check `docker images` on remote nodes.
+### A. Dependencies & Migration
+The original code was written for TensorFlow 1.x. The following changes were made to support TF 2.x:
+1.  **Imports:** Used `tensorflow.compat.v1` and `tf.disable_v2_behavior()`.
+2.  **Contrib:** Replaced `tensorflow.contrib.layers` with `tf.layers` (compat).
+3.  **Dependencies:** Removed incompatible version constraints from `requirements.txt` and installed `gym-aigis`, `maddpg`, `multiagent-particle-envs` in editable mode.
 
-**Q: Connection refused to `ca.org1.example.com`?**
-A: DNS resolution failed.
-*   **Fix:** Check if `coredns` container is running (`docker ps`). Check if port 53 is occupied (`netstat -ulpn | grep 53`). Restart CoreDNS if needed.
+### B. Critical Runtime Fixes
+1.  **MongoDB Disabled:** `lc.py` originally tried to log every step to a local MongoDB. This was disabled (commented out) to allow running without a DB.
+2.  **Robust Metrics Collection:**
+    *   **Prometheus:** Modified `utils/metrics.py` to cast values to float and handle errors, ensuring only numeric data enters the RL model.
+    *   **Caliper/Docker:** Modified `collector.py` to handle missing/NaN Docker stats (CPU/Mem). If Caliper fails to monitor Docker, it defaults to 0.0 instead of crashing. This ensures the reward function (based on TPS/Latency) still works.
+3.  **Pandas Compatibility:** Modified `env.py` to split chained `fillna().clip()` operations and force float casting, preventing `AssertionError` in newer Pandas versions.
+
+---
+
+## 5. Running the Automated Training Loop
+
+The training consists of two components:
+1.  **Parameter Server (`main.py`):** Handles deployment requests and executes Ansible playbooks.
+2.  **DRL Agent (`lc.py`):** Generates configurations, requests deployment, observes metrics, and learns.
+
+### Startup Command
+Run both in background (using `nohup` recommended):
+
+```bash
+# 1. Start the Parameter Server (Terminal 1)
+cd /root/Athena
+nohup python3 main.py > main.log 2>&1 &
+
+# 2. Start the DRL Agent (Terminal 2)
+cd /root/Athena/maddpg/maddpg/experiments
+nohup python3 lc.py > train.log 2>&1 &
+```
+
+### Monitoring
+*   **Deployment Status:** `tail -f /root/Athena/main.log`
+*   **Training Progress:** `tail -f /root/Athena/maddpg/maddpg/experiments/train.log`
+*   **Reports:** Check `/root/Athena/caliper-deploy-tool/history/` for HTML reports generated after each iteration.
+
+---
+
+## 6. Troubleshooting DRL Training
+
+**Q: `NameError: name 'mycol' is not defined`**
+A: You commented out the MongoDB initialization but left the `insert_one` call active.
+*   **Fix:** Ensure all MongoDB-related lines in `lc.py` are commented out.
+
+**Q: `ValueError: All arrays must be of the same length`**
+A: `main.py` attempted to aggregate metrics from different node types (Peer vs Orderer) into a single DataFrame.
+*   **Fix:** In `main.py`, ensure `metrics_collector.collect_from_prometheus()` is called **without** a handler argument. Let `env.py` handle the raw dictionary structure.
+
+**Q: `TypeError: Could not convert ... to numeric`**
+A: Pandas encountered strings (e.g., container names) when calculating means.
+*   **Fix:** Ensure `utils/metrics.py` casts values to float, and `collector.py` uses `mean(numeric_only=True)`.
+
+**Q: GPU Warnings in `train.log`?**
+A: `kernel driver does not appear to be running...`
+*   **Status:** Harmless. TensorFlow falls back to CPU automatically.

@@ -1,0 +1,216 @@
+{
+  "configtx": {
+    "AbsoluteMaxBytes": {
+      "unit": null,
+      "value": 10485760
+    },
+    "BatchTimeout": {
+      "unit": "ms",
+      "value": 2000
+    },
+    "MaxMessageCount": {
+      "unit": null,
+      "value": 5000
+    },
+    "PreferredMaxBytes": {
+      "unit": null,
+      "value": 2097152
+    }
+  },
+  "orderer": {
+    "ORDERER_GENERAL_AUTHENTICATION_TIMEWINDOW": {
+      "unit": "m",
+      "value": 15
+    },
+    "ORDERER_GENERAL_CLUSTER_SENDBUFFERSIZE": {
+      "unit": null,
+      "value": 10
+    },
+    "ORDERER_GENERAL_KEEPALIVE_SERVERINTERVAL": {
+      "unit": "s",
+      "value": 7200
+    },
+    "ORDERER_GENERAL_KEEPALIVE_SERVERMININTERVAL": {
+      "unit": "s",
+      "value": 60
+    },
+    "ORDERER_GENERAL_KEEPALIVE_SERVERTIMEOUT": {
+      "unit": "s",
+      "value": 20
+    },
+    "ORDERER_METRICS_STATSD_WRITEINTERVAL": {
+      "unit": "s",
+      "value": 30
+    },
+    "ORDERER_RAMLEDGER_HISTORYSIZE": {
+      "unit": null,
+      "value": 1000
+    }
+  },
+  "peer": {
+    "CORE_PEER_AUTHENTICATION_TIMEWINDOW": {
+      "unit": "m",
+      "value": 15
+    },
+    "CORE_PEER_CLIENT_CONNTIMEOUT": {
+      "unit": "s",
+      "value": 3
+    },
+    "CORE_PEER_DELIVERYCLIENT_CONNTIMEOUT": {
+      "unit": "s",
+      "value": 30
+    },
+    "CORE_PEER_DELIVERYCLIENT_RECONNECTBACKOFFTHRESHOLD": {
+      "unit": "s",
+      "value": 3600
+    },
+    "CORE_PEER_DELIVERYCLIENT_RECONNECTTOTALTIMETHRESHOLD": {
+      "unit": "s",
+      "value": 3600
+    },
+    "CORE_PEER_DISCOVERY_AUTHCACHEMAXSIZE": {
+      "unit": null,
+      "value": 1000
+    },
+    "CORE_PEER_DISCOVERY_AUTHCACHEPURGERETENTIONRATIO": {
+      "unit": null,
+      "value": 0.75
+    },
+    "CORE_PEER_GOSSIP_ALIVEEXPIRATIONTIMEOUT": {
+      "unit": "s",
+      "value": 25
+    },
+    "CORE_PEER_GOSSIP_ALIVETIMEINTERVAL": {
+      "unit": "s",
+      "value": 5
+    },
+    "CORE_PEER_GOSSIP_CONNTIMEOUT": {
+      "unit": "s",
+      "value": 2
+    },
+    "CORE_PEER_GOSSIP_DIALTIMEOUT": {
+      "unit": "s",
+      "value": 3
+    },
+    "CORE_PEER_GOSSIP_DIGESTWAITTIME": {
+      "unit": "s",
+      "value": 1
+    },
+    "CORE_PEER_GOSSIP_ELECTION_LEADERALIVETHRESHOLD": {
+      "unit": "s",
+      "value": 10
+    },
+    "CORE_PEER_GOSSIP_ELECTION_MEMBERSHIPSAMPLEINTERVAL": {
+      "unit": "s",
+      "value": 1
+    },
+    "CORE_PEER_GOSSIP_ELECTION_STARTUPGRACEPERIOD": {
+      "unit": "s",
+      "value": 15
+    },
+    "CORE_PEER_GOSSIP_MAXBLOCKCOUNTTOSTORE": {
+      "unit": null,
+      "value": 100
+    },
+    "CORE_PEER_GOSSIP_MAXPROPAGATIONBURSTLATENCY": {
+      "unit": "ms",
+      "value": 10
+    },
+    "CORE_PEER_GOSSIP_MAXPROPAGATIONBURSTSIZE": {
+      "unit": null,
+      "value": 10
+    },
+    "CORE_PEER_GOSSIP_MEMBERSHIPTRACKERINTERVAL": {
+      "unit": "s",
+      "value": 5
+    },
+    "CORE_PEER_GOSSIP_PROPAGATEITERATIONS": {
+      "unit": null,
+      "value": 1
+    },
+    "CORE_PEER_GOSSIP_PROPAGATEPEERNUM": {
+      "unit": null,
+      "value": 3
+    },
+    "CORE_PEER_GOSSIP_PUBLISHCERTPERIOD": {
+      "unit": "s",
+      "value": 10
+    },
+    "CORE_PEER_GOSSIP_PUBLISHSTATEINFOINTERVAL": {
+      "unit": "s",
+      "value": 4
+    },
+    "CORE_PEER_GOSSIP_PULLINTERVAL": {
+      "unit": "s",
+      "value": 4
+    },
+    "CORE_PEER_GOSSIP_PULLPEERNUM": {
+      "unit": null,
+      "value": 3
+    },
+    "CORE_PEER_GOSSIP_RECONNECTINTERVAL": {
+      "unit": "s",
+      "value": 25
+    },
+    "CORE_PEER_GOSSIP_RECVBUFFSIZE": {
+      "unit": null,
+      "value": 20
+    },
+    "CORE_PEER_GOSSIP_REQUESTSTATEINFOINTERVAL": {
+      "unit": "s",
+      "value": 4
+    },
+    "CORE_PEER_GOSSIP_REQUESTWAITTIME": {
+      "unit": "ms",
+      "value": 1500
+    },
+    "CORE_PEER_GOSSIP_RESPONSEWAITTIME": {
+      "unit": "s",
+      "value": 2
+    },
+    "CORE_PEER_GOSSIP_SENDBUFFSIZE": {
+      "unit": null,
+      "value": 200
+    },
+    "CORE_PEER_GOSSIP_STATE_BATCHSIZE": {
+      "unit": null,
+      "value": 10
+    },
+    "CORE_PEER_GOSSIP_STATE_BLOCKBUFFERSIZE": {
+      "unit": null,
+      "value": 100
+    },
+    "CORE_PEER_GOSSIP_STATE_CHECKINTERVAL": {
+      "unit": "s",
+      "value": 10
+    },
+    "CORE_PEER_GOSSIP_STATE_MAXRETRIES": {
+      "unit": null,
+      "value": 3
+    },
+    "CORE_PEER_GOSSIP_STATE_RESPONSETIMEOUT": {
+      "unit": "s",
+      "value": 3
+    },
+    "CORE_PEER_KEEPALIVE_CLIENT_INTERVAL": {
+      "unit": "s",
+      "value": 60
+    },
+    "CORE_PEER_KEEPALIVE_CLIENT_TIMEOUT": {
+      "unit": "s",
+      "value": 20
+    },
+    "CORE_PEER_KEEPALIVE_DELIVERYCLIENT_INTERVAL": {
+      "unit": "s",
+      "value": 60
+    },
+    "CORE_PEER_KEEPALIVE_DELIVERYCLIENT_TIMEOUT": {
+      "unit": "s",
+      "value": 20
+    },
+    "CORE_PEER_KEEPALIVE_MININTERVAL": {
+      "unit": "s",
+      "value": 60
+    }
+  }
+}
