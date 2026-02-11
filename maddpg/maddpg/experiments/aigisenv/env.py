@@ -3,31 +3,27 @@ from gym import error, spaces, utils
 from gym.utils import seeding
 import numpy as np
 import pandas as pd
-import requests
 import json
 import time
-import pdb
+import sys
+import os
+import re
+import yaml
+from collections import defaultdict
 
-url = "http://127.0.0.1:5000/cdt"
-
-
+# Add mcts to path
+sys.path.append('/root/mcts')
+try:
+    from config_sdk import ConfigSDK, ConfigSDKError
+except ImportError:
+    print("Warning: Could not import config_sdk")
 
 class AigisEnv(gym.Env):
-    """
-    Multi Agent
-    obs: [[orderer], [peer], [peer-net]]
-    action:[orderer, peer, peer-net]
-    agent: orderer, peer, peer-net
-    """
-    # metadata = {'render.modes': ['human']}   
-
     def __init__(self, booted=True, act_importance=53):
-        """
-        params:
-        booted: 标识是否已经有初始化数据
-        act_importance: 调整的action参数数量, 需要加1
-        """
-        # 重要性排序action列表
+        self.sdk = ConfigSDK(base_url="http://192.168.0.96:8321/")
+        self.action_max_file = "/root/Athena/action.max.yaml"
+        
+        # Keep internal actions list
         self._internal_actions = [
             'CORE_PEER_GOSSIP_STATE_BLOCKBUFFERSIZE',
             'CORE_PEER_GOSSIP_PUBLISHCERTPERIOD',
@@ -86,222 +82,117 @@ class AigisEnv(gym.Env):
             'CORE_PEER_GOSSIP_ELECTION_MEMBERSHIPSAMPLEINTERVAL'
         ]
 
-        assert (act_importance - 1) <= len(self._internal_actions)
-
-        # 执行一次benchmark，获取所有Prometheus
         self._act_importance = act_importance
         self._action_limits = self._get_action_limits()
-        self._max_list = np.array(self._action_dict2list(self._action_limits, index=True), dtype=object).copy()
+        
+        # This call populates self._act_range_dict and returns max values
+        self._max_list = self._action_dict2list(self._action_limits, index=True)
+        
         self._obs_limits = None
         self._obs_shape_dict = None
         
+        self.initial_reward_params = {"TPS": 100.0, "Latency": 1.0, "SuccessRate": 1.0}
+        self.current_reward_params = self.initial_reward_params.copy()
+        self.last_reward_params = self.initial_reward_params.copy()
 
+        # Agents: orderer, peer, peer-net -> 3 agents
+        self.n = 3
+        print("number of agent: ", self.n)
+
+        # Initialize CDT and get baseline
         if not booted:
             self._init_cdt()
-            initial_reward_params = self._collect_state()
-            
-            print("Saved to metadata.")
-            self.save_config(initial_reward_params, "./obs-metadata.npy")
         else:
-            print("Loaded from metadata.")
-            initial_reward_params = self.load_metadata("./obs-metadata.npy")
-            self.state = initial_reward_params
-            self.current_reward_params = {
-            "Latency": self.state['caliper']['Latency'],
-            "TPS": self.state['caliper']['TPS']
-        }
-
-        # set obs limits
-        _obs_num, _obs = self._handle_state(initial_reward_params)
-        self._init_obs = _obs
-
-        self.initial_reward_params = {
-            "Latency": initial_reward_params['caliper']['Latency'],
-            "TPS": initial_reward_params['caliper']['TPS']
-        }
-
-        self.last_reward_params = {
-            "Latency": initial_reward_params['caliper']['Latency'],
-            "TPS": initial_reward_params['caliper']['TPS']
-        }
-
-
-        # df = pd.DataFrame(initial_reward_params['prom']).astype("float")
-        # limits = df.mean() * 10
-        # self.limits = pd.DataFrame(limits).T.to_dict()
-
-        # self.obs_num = len(initial_reward_params['prom'][0])
-        # self.obs_num = 54
-        self.n = len(_obs)
-        print("number of agent: ", self.n)
-        # self.act_num = len(self._action_dict2list(self._action_limits))
-        print("obs: %d\t current action: %d\t total action: %d" % (_obs_num, 
-        len(self._act_range_dict['orderer']) + len(self._act_range_dict['peer']) + len(self._act_range_dict['peer-net']),
-        self._act_range_dict['length']))
-        # obs_high = [np.ones(i.shape, dtype='float32') for i in _obs]
-        # print(obs_high)
-        # self.observation_space = [spaces.Box(
-        #     low= 0.0,
-        #     high = 1.0,
-        #     shape = i.shape,
-        #     dtype = np.float32
-        # ) for i in _obs]
-        # action_high = np.ones(self.act_num, dtype=np.float32)
-        self.action_space = [
-            spaces.Box(
-            low = 0.0,
-            high = 1.0,
-            shape = (len(self._act_range_dict['orderer']),),
-            dtype = np.float32
-            ),
-            spaces.Box(
-            low = 0.0,
-            high = 1.0,
-            shape = (len(self._act_range_dict['peer']),),
-            dtype = np.float32
-            ),
-            spaces.Box(
-            low = 0.0,
-            high = 1.0,
-            shape = (len(self._act_range_dict['peer-net']),),
-            dtype = np.float32
-            )
-        ]
-        self.observation_space = [i.shape for i in _obs]
-        # self.action_space = self.act_num
-
-
-        self.err_count = 0
-        self.c_T = 0.8
-        self.c_L = 0.2
+            self._init_cdt()
 
         
+        print("obs: 3 (TPS,Lat,SR)\t current action: %d\t total action: %d" % (
+        len(self._act_range_dict['orderer']) + len(self._act_range_dict['peer']) + len(self._act_range_dict['peer-net']),
+        self._act_range_dict['length']))
+        
+        # Action Space
+        self.action_space = [
+            spaces.Box(low=0.0, high=1.0, shape=(len(self._act_range_dict['orderer']),), dtype=np.float32),
+            spaces.Box(low=0.0, high=1.0, shape=(len(self._act_range_dict['peer']),), dtype=np.float32),
+            spaces.Box(low=0.0, high=1.0, shape=(len(self._act_range_dict['peer-net']),), dtype=np.float32)
+        ]
+        
+        # Observation Space
+        # We use [TPS, Latency, SuccessRate] -> shape (3,) for all agents
+        self.obs_dim = 3
+        self.observation_space = [spaces.Box(low=0, high=1, shape=(self.obs_dim,), dtype=np.float32) for _ in range(self.n)]
+        
+        self._obs_shape_dict = {
+            "orderer": (self.obs_dim,),
+            "peer": (self.obs_dim,),
+            "peer-net": (self.obs_dim,)
+        }
 
-        # self.stop_cdt()
+        self.c_T = 0.8
+        self.c_L = 0.2
+        self.err_count = 0
+        
         print("initial_reward:\t", self.initial_reward_params)
         print("Aigis init success!")
 
-    def _convert2sorteddf(self, data):
-        """
-        处理原始state信息，返回《固定排序》的DataFrame
-        """
-        tdf = pd.DataFrame.from_dict(data).fillna(0).astype("float")
-        tcols = sorted(list(tdf.columns))
-        return tdf[tcols]
-    
-    def _handle_state(self, state):
-        """
-        26, 25, 29
-        处理原始state信息，转换成二维obs[[orderer], [peer], [peer-net]]
-        """
-        _obs = []
-        for node_name in ("orderer", "peer", "peer-net"):
-            _obs.append(pd.DataFrame(self._convert2sorteddf(state['prom'][node_name]).mean()).T)
-        _onelinedf = pd.concat(_obs, axis=1).astype(float)
-        if self._obs_limits is  None:
-            # 设置obs的limit为初始值的5倍
-            self._obs_limits = _onelinedf * 5
-        else:
-            # Align columns to match the initial observation shape (limits)
-            # This handles cases where Prometheus metrics might vary (missing or new columns)
-            _onelinedf = _onelinedf.reindex(columns=self._obs_limits.columns, fill_value=0.0)
+    def _get_action_limits(self):
+        if not os.path.exists(self.action_max_file):
+            print(f"Error: {self.action_max_file} not found.")
+            return {}
+        # yaml_data = athena_utils.load_config(self.action_max_file)
+        with open(self.action_max_file) as f:
+            yaml_data = yaml.load(f, Loader=yaml.FullLoader)
+        return self._yaml2inter(yaml_data)
 
-        # 此处fillna是为了防止除数为0，即最大值有可能是0
-        # _onelineres = (_onelinedf / self._obs_limits).fillna(1.0).clip(0, 1.0)
-        # _temp = (_onelinedf / self._obs_limits).fillna(1.0)
-        # Use numpy for safer clipping to avoid Pandas AssertionError
-        # _onelineres = pd.DataFrame(np.clip(_temp.values.astype(float), 0.0, 1.0), columns=_temp.columns)
-        
-        # Complete bypass of Pandas for arithmetic to avoid BlockManager errors
-        _vals = _onelinedf.values
-        _limits = self._obs_limits.values
-        # Avoid division by zero warnings if limits has 0
-        with np.errstate(divide='ignore', invalid='ignore'):
-            _temp_np = _vals / _limits
-        
-        _temp_np = np.nan_to_num(_temp_np, nan=1.0)
-        _onelineres_np = np.clip(_temp_np, 0.0, 1.0)
-        _onelineres = pd.DataFrame(_onelineres_np, columns=_onelinedf.columns)
-        # print(_onelineres.info())
-        _res = []
-        _sum = 0
-        for item in _obs: 
-            _res.append(np.squeeze(_onelineres.iloc[:, _sum: item.shape[1] + _sum].values, 0))
-            _sum += item.shape[1]
-        
-        if self._obs_shape_dict is None:
-            self._obs_shape_dict = {}
-            self._obs_shape_dict["orderer"] = _res[0].shape
-            self._obs_shape_dict["peer"] = _res[1].shape
-            self._obs_shape_dict["peer-net"] = _res[2].shape
-            print("set obs_shape_dict: {}, {}, {}".format(_res[0].shape, _res[1].shape, _res[2].shape))
-
-        return _onelineres.shape[1], _res
-
-
-
-    # load config
-    def load_metadata(self, file):
-        return np.load(file, allow_pickle=True).item()
-
-    # save config
-    def save_config(self, data, target_file):
-        np.save(target_file, data)
+    def _yaml2inter(self, yaml_data):
+        res = defaultdict(dict)
+        for item in yaml_data:
+            for key in yaml_data[item]:
+                if type(yaml_data[item][key]) in (int, float):
+                    res[item][key] = {"value": yaml_data[item][key], "unit": None}
+                else:
+                    temp_str = str(yaml_data[item][key])
+                    value = re.findall(r'\d', temp_str)
+                    if not value: continue
+                    value_num = "".join(value)
+                    unit = temp_str.replace(value_num, "")
+                    res[item][key] = {"value": int(value_num), "unit": unit}
+        return dict(res)
 
     def _action_dict2list(self, dict_data, index=False):
-        """
-        index: 是否需要计算索引
-        input: ["configtx", "orderer", "peer"]
-                    convert
-        return: list [[orderer], [peer], [peer-net]]
-        """
         res = []
-        # 记录输出的action在原始一维action数值中的位置【对应action_limits】
         _index_range = {
             "orderer": [],
             "peer" : [],
             "peer-net": [],
-            "length": 0 # length为总action的长度，但可能不等于len(orderer + peer + peer-net)
+            "length": 0 
         }
-        # for item in dict_data:
-        #     node_acts = []
-        #     for key in dict_data[item]:
-        #         node_acts.append(dict_data[item][key]['value'])
-        #     res.append(node_acts)
         
-        # 标识gossip的action在action一维数组的索引
         flag = 0
-        # orderer
         orderer_acts = []
         for item in ('configtx', 'orderer'):
-            for key in dict_data[item]:
-                if key in self._internal_actions[:self._act_importance]:
-                    _index_range['orderer'].append(flag)
-                    orderer_acts.append(dict_data[item][key]['value'])
-                flag += 1
+            if item in dict_data:
+                for key in dict_data[item]:
+                    if key in self._internal_actions[:self._act_importance]:
+                        _index_range['orderer'].append(flag)
+                        orderer_acts.append(dict_data[item][key]['value'])
+                    flag += 1
         res.append(orderer_acts)
 
-        # peer
         peer_acts = []
         net_acts = []
 
-        for key in dict_data['peer']:
-            if key in self._internal_actions[:self._act_importance]:
-                if "GOSSIP" in key:
-                    
-                    _index_range['peer-net'].append(flag)
-                    net_acts.append(dict_data['peer'][key]['value'])
-                else:
-                    
-                    _index_range['peer'].append(flag)
-                    peer_acts.append(dict_data['peer'][key]['value'])
-            flag += 1
+        if 'peer' in dict_data:
+            for key in dict_data['peer']:
+                if key in self._internal_actions[:self._act_importance]:
+                    if "GOSSIP" in key:
+                        _index_range['peer-net'].append(flag)
+                        net_acts.append(dict_data['peer'][key]['value'])
+                    else:
+                        _index_range['peer'].append(flag)
+                        peer_acts.append(dict_data['peer'][key]['value'])
+                flag += 1
         
-        # 需要保证action的数量使得agent==3
-        assert len(peer_acts) != 0
-        assert len(net_acts) != 0
-        assert len(orderer_acts) != 0
-
         res.append(peer_acts)
         res.append(net_acts)
         _index_range['length'] = flag
@@ -311,79 +202,199 @@ class AigisEnv(gym.Env):
             print("set internal action range dict: ", self._act_range_dict)
         return res
 
-
-
     def _action_list2dict(self, list_data):
-        """
-        input: list [[orderer], [peer], [peer-net]]
-                    convert
-        return: ["configtx", "orderer", "peer"]
-        """
-        # 二维变为一维
         flatten_list = [0] * self._act_range_dict['length']
-        # 提前赋值
-        dict_data = self._action_limits.copy()
-        index = 0
-        for item in dict_data:
-            for key in dict_data[item]:
-                flatten_list[index] = dict_data[item][key]['value']
-                index += 1
-        # orderer
+        dict_data = self._action_limits 
+        
         for (index, item) in enumerate(list_data[0]):
             flatten_list[self._act_range_dict['orderer'][index]] = item
-        # peer
         for (index, item) in enumerate(list_data[1]):
             flatten_list[self._act_range_dict['peer'][index]] = item
-        # net
         for (index, item) in enumerate(list_data[2]):
             flatten_list[self._act_range_dict['peer-net'][index]] = item
-
-
-        # dict_data = self._action_limits.copy()
-        # index = 0
-        # for item in dict_data:
-        #     for key in dict_data[item]:
-        #         dict_data[item][key]['value'] = flatten_list[index]
-        #         index += 1
-        return dict_data
-
-    def _get_action_limits(self):
-        response = requests.request("GET", url + "/action/limits")
-        limits = json.loads(response.text)
-        return limits
-    
-    def _collect_state(self):
-        if 'current_reward_params' in dir(self):
-            print("Set last_reward_params:\t", self.current_reward_params)
-            self.last_reward_params = self.current_reward_params
-
-        response = requests.request("GET", url + "/metrics")
-        try:
-            state = json.loads(response.text)
-        except json.JSONDecodeError as e:
-            print(f"Error decoding JSON from {url}/metrics. Status Code: {response.status_code}")
-            print(f"Response text: {response.text}")
-            raise e
             
-        self.current_reward_params = {
-            "Latency": state['caliper']['Latency'],
-            "TPS": state['caliper']['TPS']
-        }
-        print("Set current_reward_params:\t", self.current_reward_params)
-        self.state = state
-        return self.state
+        output_configs = {}
+        idx = 0
+        
+        for item in ('configtx', 'orderer'):
+            if item in dict_data:
+                for key in dict_data[item]:
+                    val = flatten_list[idx]
+                    unit = dict_data[item][key]['unit']
+                    val = int(val)
+                    CONST_ORDERER_PARAMS = ("BatchTimeout", "MaxMessageCount", "AbsoluteMaxBytes", "PreferredMaxBytes")
+                    if key in CONST_ORDERER_PARAMS:
+                         val = val if val > 0 else (val + 1)
+                    val_str = str(val)
+                    if unit:
+                        val_str += unit
+                    output_configs[key] = val_str
+                    idx += 1
+        
+        if 'peer' in dict_data:
+            for key in dict_data['peer']:
+                val = flatten_list[idx]
+                unit = dict_data['peer'][key]['unit']
+                val = int(val)
+                val_str = str(val)
+                if unit:
+                    val_str += unit
+                output_configs[key] = val_str
+                idx += 1
+                
+        return output_configs
 
+    def _init_cdt(self):
+        print("Initializing CDT...")
+        try:
+            try:
+                with self.sdk.session(configs={}) as sess:
+                    result = sess.test()
+                    self._collect_state(result)
+            except ConfigSDKError as e:
+                if e.status == 409:
+                    print("Session conflict detected. Cleaning up previous session...")
+                    payload = e.payload
+                    if isinstance(payload, dict) and 'session_id' in payload:
+                        try:
+                            self.sdk.session_end(payload['session_id'])
+                        except Exception as cleanup_err:
+                            print(f"Cleanup warning: {cleanup_err}")
+                    # Retry once
+                    with self.sdk.session(configs={}) as sess:
+                        result = sess.test()
+                        self._collect_state(result)
+                else:
+                    raise e
+            
+            self.initial_reward_params = self.current_reward_params.copy()
+            self.last_reward_params = self.current_reward_params.copy()
+            
+            init_tps = self.initial_reward_params['TPS']
+            init_lat = self.initial_reward_params['Latency']
+            
+            self.limits = {
+                "TPS": max(init_tps * 5, 5000),
+                "Latency": max(init_lat * 5, 30),
+                "SuccessRate": 1.0
+            }
+            self._init_obs = self._handle_state(self.current_reward_params)
+        except Exception as e:
+            print(f"Error initializing: {e}")
+            self.initial_reward_params = {"TPS": 100.0, "Latency": 1.0, "SuccessRate": 1.0}
+            self.last_reward_params = self.initial_reward_params.copy()
+            self.limits = {"TPS": 5000, "Latency": 30, "SuccessRate": 1.0}
+            self.current_reward_params = self.initial_reward_params.copy()
+            self._init_obs = self._handle_state(self.current_reward_params)
 
-    # def _cal_delta(self, delta0, delta1):
+    def _collect_state(self, test_result=None):
+        if test_result is not None:
+            tps = 0.0
+            latency = 0.0
+            succ = 0.0
+            if test_result and 'result' in test_result:
+                for name, metrics in test_result['result'].items():
+                    try:
+                        tps = float(metrics.get('throughput', 0))
+                        latency = float(metrics.get('avg-lat', 0))
+                        s = float(metrics.get('succ', 0))
+                        f = float(metrics.get('fail', 0))
+                        total = s + f
+                        succ = (s / total) if total > 0 else 0.0
+                        break
+                    except:
+                        pass
+            
+            self.current_reward_params = {
+                "TPS": tps,
+                "Latency": latency,
+                "SuccessRate": succ
+            }
+        return self.current_reward_params
 
-    #     if delta0 > 0:
-    #         _res = (np.square((1 + delta0)) -1) * abs(1 + delta1)
-    #     else:
-    #         _res = -(np.square((1 - delta0)) -1) * abs(1 - delta1)
+    def _handle_state(self, state_dict):
+        norm_tps = state_dict['TPS'] / self.limits['TPS']
+        norm_lat = state_dict['Latency'] / self.limits['Latency']
+        norm_sr = state_dict['SuccessRate'] / self.limits['SuccessRate']
+        
+        obs_vec = np.array([norm_tps, norm_lat, norm_sr]).clip(0, 1)
+        return [obs_vec.copy() for _ in range(self.n)]
 
-    #     if _res > 0 and delta1 < 0:
-    #         _res = 0
-    #     return _res
+    def _deploy_cdt(self, config):
+        input_config = []
+        for i, agent_actions in enumerate(config):
+            input_config.append(np.array(agent_actions) * np.array(self._max_list[i]))
+        configs_dict = self._action_list2dict(input_config)
+        
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                with self.sdk.session(configs=configs_dict) as sess:
+                    result = sess.test()
+                    return result
+            except ConfigSDKError as e:
+                if e.status == 409:
+                    print(f"Conflict in deploy (attempt {attempt+1}/{max_retries}). Cleaning up...")
+                    payload = e.payload
+                    if isinstance(payload, dict) and 'session_id' in payload:
+                        try:
+                            self.sdk.session_end(payload['session_id'])
+                        except Exception as cleanup_err:
+                            print(f"Cleanup warning: {cleanup_err}")
+                    
+                    # Wait a bit before retrying
+                    time.sleep(2)
+                    continue
+                else:
+                    print(f"Deployment error: {e}")
+                    return None
+            except Exception as e:
+                print(f"Deployment exception: {e}")
+                return None
+        
+        print("Deployment failed after retries.")
+        return None
+
+    def step(self, action_n, with_stop=True):
+        start_time = time.time()
+        test_result = self._deploy_cdt(action_n)
+        
+        if test_result:
+            self._collect_state(test_result)
+            obs_n = self._handle_state(self.current_reward_params)
+            reward = self._cal_reward()
+            rew_n = [reward] * self.n
+            self.last_reward_params = self.current_reward_params.copy()
+        else:
+            obs_n = [np.zeros(self.obs_dim) for _ in range(self.n)]
+            rew_n = [-100.0] * self.n
+            reward = -100.0
+        
+        seconds = int(time.time() - start_time)
+        print("\n  Step time: {}s".format(seconds))
+        print(f"Obs: TPS={self.current_reward_params['TPS']}, Lat={self.current_reward_params['Latency']}, SR={self.current_reward_params['SuccessRate']}, Rew={reward}")
+        
+        return obs_n, rew_n, [False]*self.n, {}, self.current_reward_params['TPS'], self.current_reward_params['Latency']
+
+    def _cal_reward(self):
+        r_T = 0
+        r_L = 0
+        init_tps = self.initial_reward_params['TPS'] if self.initial_reward_params['TPS'] > 0 else 1
+        last_tps = self.last_reward_params['TPS'] if self.last_reward_params['TPS'] > 0 else 1
+        curr_tps = self.current_reward_params['TPS']
+        deltaT_0 = (curr_tps - init_tps) / init_tps
+        deltaT_1 = (curr_tps - last_tps) / last_tps
+        r_T = self._cal_delta_T(deltaT_0, deltaT_1, 10)
+        
+        init_lat = self.initial_reward_params['Latency'] if self.initial_reward_params['Latency'] > 0 else 0.1
+        last_lat = self.last_reward_params['Latency'] if self.last_reward_params['Latency'] > 0 else 0.1
+        curr_lat = self.current_reward_params['Latency']
+        deltaL_0 = -(curr_lat - init_lat) / init_lat
+        deltaL_1 = -(curr_lat - last_lat) / last_lat
+        r_L = self._cal_delta_L(deltaL_0, deltaL_1, 10)
+        
+        return self.c_L * r_L + self.c_T * r_T
+
     def _cal_delta_T(self, delta0, delta1, eta):
         if delta1 > 0:
             return np.exp(eta * delta0*delta1)
@@ -396,199 +407,8 @@ class AigisEnv(gym.Env):
         else:
             return np.exp(-eta*delta0*delta1)
 
-
-    def _cal_reward(self):
-        r_T = 0
-        r_L = 0
-        # deltaT
-        deltaT_0 = (self.current_reward_params['TPS'] - self.initial_reward_params['TPS']) / self.initial_reward_params['TPS']
-        deltaT_1 = (self.current_reward_params['TPS'] - self.last_reward_params['TPS']) / self.last_reward_params['TPS']
-        # if deltaT_0 > 0:
-        #     r_T = (np.square((1 + deltaT_0)) -1) * abs(1 + deltaT_1)
-        # else:
-        #     r_T = -(np.square((1 - deltaT_0)) -1) * abs(1 - deltaT_1)
-        r_T = self._cal_delta_T(deltaT_0, deltaT_1, 10)
-        # r_T = self._cal_delta(deltaT_0, deltaT_1)
-
-        # deltaL
-        deltaL_0 = -(self.current_reward_params['Latency'] - self.initial_reward_params['Latency']) / self.initial_reward_params['Latency']
-        deltaL_1 = -(self.current_reward_params['Latency'] - self.last_reward_params['Latency']) / self.last_reward_params['Latency']
-        # if deltaL_0 > 0:
-        #     r_L = (np.square((1 + deltaL_0)) -1) * abs(1 + deltaL_1)
-        # else:
-        #     r_L = -(np.square((1 - deltaL_0)) -1) * abs(1 - deltaL_1)
-        r_L = self._cal_delta_L(deltaL_0, deltaL_1, 10)
-        # r_L = self._cal_delta(deltaL_0, deltaL_1)
-        res = self.c_L * r_L + self.c_T * r_T
-        return res
-
-
-    def _init_cdt(self):
-        """
-        使用默认参数先跑一次CDT获取状态信息，Reward等
-        """
-        response = requests.request("POST", url + "/deploy/default")
-        print("__init_cdt:\t", response.text)
-        time.sleep(5)
-        while True:
-            scode = self._check_cdt_status()
-            if scode == 1:
-                # 重试 Retry
-                return False
-            elif scode == 0:
-                # 成功
-                break
-            time.sleep(3)
-        print("Set default state successfully.")
-        return True
-
-
-    def _deploy_cdt(self,config=None):
-        """
-        config 为ddpg输入，范围0-1
-        """
-        print("_deploy_cdt: config", config)
-        time_start = time.time()
-
-        # input_list = np.array(config)
-        # input_config = list(input_list * self._max_list)
-        input_config = []
-        for (index, item) in enumerate(config):
-            input_config.append(self._max_list[index] * item)
-            
-        # print("action: ")
-        # print(input_config)
-        # return
-        output_config_dict = self._action_list2dict(input_config)
-        headers = {
-        'Content-Type': 'application/json'
-        }
-        time_end = time.time()
-        print("generate action time cost: {}s".format(time_end - time_start))
-        response = requests.request("POST", url + "/deploy/up", headers=headers, data=json.dumps(output_config_dict))
-        # print("deploy_result:\t" + response.text)
-        time.sleep(3)
-        # total_iteration = 0
-        while True:
-            scode = self._check_cdt_status()
-            if scode == 1:
-                # 重试
-                return False
-            elif scode == 0:
-                # 成功
-                break
-            time.sleep(3)
-            # total_iteration += 1
-        
-        return True
-            # if(total_iteration % 10 == 0):
-                # print("[deploy-cdt-up] Wait for cdt benchmark result ...")
-        # return True if response.text == "Good" else False
-
-    def stop_cdt(self):
-        response = requests.request("DELETE", url + "/deploy/down")
-        # print(response.text)
-        time.sleep(1)
-        total_iteration = 0
-        while self._check_cdt_status():
-            time.sleep(1)
-            total_iteration += 1
-            # if(total_iteration % 10 == 0):
-                # print("[deploy-cdt-down] Wait for cdt stop ...")
-        # print("Done.")
-        return True
-
-    
-    def _check_cdt_status(self):
-        response = requests.request("GET", url + "/action/status")
-        if response.text == "Not Found":
-            return -1
-        elif response.text == "Retry":
-            return 1
-        else:
-            return 0
-
-    # def _normalization(self, state):
-    #     # min-max 归一化
-    #     df_state = pd.DataFrame(state['prom']).astype('float')
-    #     df_state = pd.DataFrame(df_state.mean()).T
-    #     df_limits = pd.DataFrame(self.limits)
-
-    #     df_res = df_state / df_limits
-    #     df_res = df_res.fillna(value=0).clip(0, 1.0)
-    #     _data = np.array(df_res.values.tolist()[0])
-    #     print("prom: \t{}".format(_data))
-    #     # df_res = df_state.fillna(value=0)
-    #     # _data = np.array(df_res.values.tolist()[0])
-    #     # _data = (_data - np.mean(_data)) / np.std(_data)
-    #     return _data
-
-    def step(self, action, with_stop = True):
-        # 记录起始时间
-        start_time = time.time()
-        # up
-        nisRetry = self._deploy_cdt(list(action))
-
-        if nisRetry:
-            _, obs = self._handle_state(self._collect_state())
-            reward = self._cal_reward()
-        else:
-            print("ERROR: CDT is down.")
-            # 重试时说明action错误导致fabric网络没有正常启动
-            self.state['caliper']['TPS'] = 1.0
-            self.state['caliper']['Latency'] = 100
-            self.current_reward_params = {
-            "Latency": self.state['caliper']['Latency'],
-            "TPS": self.state['caliper']['TPS']
-            }
-            if 'current_reward_params' in dir(self):
-                print("Set last_reward_params:\t", self.current_reward_params)
-                self.last_reward_params = self.current_reward_params
-            # _, obs = self._handle_state(self.state)
-            # reward = self._cal_reward() - self.err_count * 1.0
-            obs = []
-            for n in ("orderer", "peer", "peer-net"):
-                obs.append(np.zeros(self._obs_shape_dict[n]))
-            reward = -100.0
-            # self.err_count += 1.0
-
-        # if with_stop:
-        #     # down
-        #     self.stop_cdt()
-
-         # 计算时间差值
-        seconds, minutes, hours = int(time.time() - start_time), 0, 0
-
-        # 可视化打印
-        hours = seconds // 3600
-        minutes = (seconds - hours*3600) // 60
-        seconds = seconds - hours*3600 - minutes*60
-        print("[Env] step complete time cost {:>02d}:{:>02d}:{:>02d}".format(hours, minutes, seconds))
-        print("[Env] obs:{} tps: {}, latency: {}, reward: {}".format( obs, str(self.state['caliper']['TPS']), str(self.state['caliper']['Latency']), reward))
-        for (index, item) in  enumerate(obs):
-            print("[ENV] obs shape: [{}]  {}".format(index, item.shape))
-        
-        assert obs[0].shape == self._obs_shape_dict['orderer']
-        assert obs[1].shape == self._obs_shape_dict['peer']
-        assert obs[2].shape == self._obs_shape_dict['peer-net']
-        
-        # print("[Env] obs: prom: {}".format(self.state['prom']))
-        return obs, [reward] * self.n, False, {}, self.state['caliper']['TPS'], self.state['caliper']['Latency']
-
-
     def reset(self):
-        # 返回obs 状态信息list
         return self._init_obs
 
-    def render(self, mode='human'):
-        pass
     def close(self):
-        self.stop_cdt()
-
-
-if __name__ == '__main__':
-    # aigis = AigisEnv(booted=True, act_importance=53)
-    aigis = AigisEnv(booted=False)
-    print(aigis.observation_space)
-    print(aigis.n)
-    print(aigis.action_space)
+        pass

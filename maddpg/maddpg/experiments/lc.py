@@ -76,7 +76,7 @@ def train_lc(arglist):
         # env = make_env(arglist.scenario, arglist, arglist.benchmark)
         env = AigisEnv(booted=False, act_importance=53)
         # Create agent trainers
-        obs_shape_n = [env.observation_space[i] for i in range(env.n)]
+        obs_shape_n = [env.observation_space[i].shape for i in range(env.n)]
         # num_adversaries = min(env.n, arglist.num_adversaries)
         trainers = get_trainers_lc(env, obs_shape_n, arglist)
         print('Using good policy {} and adv policy {}'.format(arglist.good_policy, arglist.adv_policy))
@@ -117,7 +117,7 @@ def train_lc(arglist):
                 ACT_INIT -= ACT_STEP
             action_n = [np.clip(agent.action(obs), ACT_INIT, ACT_MAX) for agent, obs in zip(trainers,obs_n)]
             # environment step
-            new_obs_n, rew_n, done, info_n, tps, latency = env.step(action_n)
+            new_obs_n, rew_n, done_n, info_n, tps, latency = env.step(action_n)
             # debug
             # pdb.set_trace()
             # mycol.insert_one({"action": [i.tolist() for i in action_n], "next_obs": [i.tolist() for i in new_obs_n], 
@@ -125,11 +125,11 @@ def train_lc(arglist):
             #                 "tps": tps, "latency": latency,
             #                 "date": datetime.datetime.now()}) 
             episode_step += 1
-            # done = done_n
+            done = all(done_n)
             terminal = (episode_step >= arglist.max_episode_len)
             # collect experience
             for i, agent in enumerate(trainers):
-                agent.experience(obs_n[i], action_n[i], rew_n[i], new_obs_n[i], done, terminal)
+                agent.experience(obs_n[i], action_n[i], rew_n[i], new_obs_n[i], done_n[i], terminal)
             obs_n = new_obs_n
 
             for i, rew in enumerate(rew_n):
