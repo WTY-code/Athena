@@ -326,6 +326,8 @@ class AigisEnv(gym.Env):
             input_config.append(np.array(agent_actions) * np.array(self._max_list[i]))
         configs_dict = self._action_list2dict(input_config)
         
+        print(f"Deploying with configs: {json.dumps(configs_dict)}")
+
         max_retries = 3
         for attempt in range(max_retries):
             try:
