@@ -20,7 +20,7 @@ except ImportError:
 
 class AigisEnv(gym.Env):
     def __init__(self, booted=True, act_importance=53):
-        self.sdk = ConfigSDK(base_url="http://192.168.0.96:8321/")
+        self.sdk = ConfigSDK(base_url="http://127.0.0.1:8000/")
         self.action_max_file = "/root/Athena/action.max.yaml"
         
         # Keep internal actions list

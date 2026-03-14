@@ -29,8 +29,8 @@ class AigisEnv(gym.Env):
 
     def __init__(self, boot=False):
         # Initialize ConfigSDK
-        # Assuming the server is running at the address specified in the prompt/task
-        self.sdk = ConfigSDK(base_url="http://192.168.0.96:8321/")
+        # Connect to the local config server created for the topology deployment
+        self.sdk = ConfigSDK(base_url="http://127.0.0.1:8000/")
         
         self.action_max_file = "/root/Athena/action.max.yaml"
         self._action_limits = self._get_action_limits()
